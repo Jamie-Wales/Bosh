@@ -1,27 +1,29 @@
 type builtin = Ls | Cd of string | Help | Pwd
 type command = Exit | Echo of string | Builtin of builtin
+type path = Path of string list
 
-let home = ref (Unix.getenv "HOME" |> String.split_on_char '/')
+let home_path () = Path (Unix.getenv "HOME" |> String.split_on_char '/')
+let string_of_path (Path components) = String.concat "/" components
 
-let addDir lst_ref str =
-  if str = "" then ()
-  else if str.[0] = '/' then
-    lst_ref :=
-      String.split_on_char '/' (String.sub str 1 (String.length str - 1))
-  else
-    (* Relative path: handle . and .. *)
-    let parts = String.split_on_char '/' str in
-    List.iter
-      (fun part ->
-         match part with
-         | "." -> ()
-         | ".." ->
-           if !lst_ref <> [] then
-             lst_ref := List.rev (List.tl (List.rev !lst_ref))
-         | _ -> lst_ref := !lst_ref @ [ part ])
-      parts
+let normalize_path components =
+  let rec normalize acc = function
+    | [] -> List.rev acc
+    | "." :: rest -> normalize acc rest
+    | ".." :: rest -> normalize (if acc = [] then [] else List.tl acc) rest
+    | x :: rest -> normalize (x :: acc) rest
+  in
+  normalize [] components
 
-let print_working_dir path = print_endline (String.concat "/" path)
+let change_dir (Path current) new_dir =
+  let new_components =
+    if String.length new_dir > 0 && new_dir.[0] = '/' then
+      String.split_on_char '/'
+        (String.sub new_dir 1 (String.length new_dir - 1))
+    else current @ String.split_on_char '/' new_dir
+  in
+  Path (normalize_path new_components)
+
+let print_working_dir path = print_endline (string_of_path path)
 
 let parse_input input =
   match input with
@@ -33,24 +35,30 @@ let parse_input input =
     Builtin (Cd (String.sub s 3 (String.length s - 3)))
   | _ -> Echo input
 
-let execute_command = function
+let execute_command current_path = function
   | Exit ->
     print_endline "Exiting...";
-    false
+    (current_path, false)
   | Echo s ->
     print_endline s;
-    true
-  | Builtin b ->
-    (match b with
-     | Ls -> print_endline "Listing files... (not implemented)"
-     | Help ->
-       print_endline
-         "Available commands: exit, ls, help, pwd, cd <directory>"
-     | Cd dir -> addDir home dir
-     | Pwd -> print_working_dir !home);
-    true
+    (current_path, true)
+  | Builtin b -> (
+      match b with
+      | Ls ->
+        print_endline "Listing files... (not implemented)";
+        (current_path, true)
+      | Help ->
+        print_endline
+          "Available commands: exit, ls, help, pwd, cd <directory>";
+        (current_path, true)
+      | Cd dir ->
+        let new_path = change_dir current_path dir in
+        (new_path, true)
+      | Pwd ->
+        print_working_dir current_path;
+        (current_path, true))
 
-let rec repl () =
+let rec repl current_path =
   print_string "> ";
   flush stdout;
   match read_line () with
@@ -59,7 +67,7 @@ let rec repl () =
     false
   | input ->
     let command = parse_input input in
-    let continue = execute_command command in
-    if continue then repl () else false
+    let new_path, continue = execute_command current_path command in
+    if continue then repl new_path else false
 
-let _ = repl ()
+let () = ignore (repl @@ home_path ())
