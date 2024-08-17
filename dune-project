@@ -18,6 +18,8 @@
 (package
  (name shell)
  (synopsis "A posix shell implementation")
- (description "An ocaml implementation of a posix shell")
+ (description "An ocaml description")
  (depends ocaml dune)
+ (tags
+  (topics "to describe" your project)))
 
