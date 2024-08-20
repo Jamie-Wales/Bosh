@@ -1,3 +1,3 @@
-# Bourne-O'Caml-Shell
+# Bourne-OCaml-Shell
 
-A posix shell implementation in O'Caml
+A posix shell implementation in OCaml
